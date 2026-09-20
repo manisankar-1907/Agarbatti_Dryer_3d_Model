@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agarbatti Vertical Dryer — 3D Airflow Model</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --bg: #0b0f14;
+    --panel: #121821;
+    --panel-2: #0e141b;
+    --line: #23303d;
+    --text: #dce4ec;
+    --text-dim: #7f8fa0;
+    --blue: #4a9eff;
+    --heat: #ff7a45;
+    --cool: #46d9c9;
+    --moist: #a78bfa;
+    --accent: #ffb648;
+    --mono: 'IBM Plex Mono', 'Courier New', monospace;
+    --sans: 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
+  }
+  @font-face{font-family:'IBM Plex Mono';src:local('IBM Plex Mono');}
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;}
+  #stage{position:fixed;inset:0;}
+  canvas{display:block;width:100%;height:100%;}
+
+  /* ---------- Top bar ---------- */
+  #topbar{
+    position:fixed;top:0;left:0;right:0;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 22px;pointer-events:none;
+    background:linear-gradient(to bottom, rgba(11,15,20,0.85), transparent);
+    z-index:20;
+  }
+  #titleblock{pointer-events:auto;}
+  #titleblock h1{
+    margin:0;font-size:15px;font-weight:600;letter-spacing:.02em;color:var(--text);
+  }
+  #titleblock p{
+    margin:2px 0 0;font-size:11.5px;color:var(--text-dim);font-family:var(--mono);
+  }
+  #dims-readout{
+    pointer-events:auto;font-family:var(--mono);font-size:11px;color:var(--text-dim);
+    text-align:right;line-height:1.5;
+  }
+  #dims-readout b{color:var(--accent);font-weight:600;}
+
+  /* ---------- Side control panel ---------- */
+  #controls{
+    position:fixed;top:78px;left:18px;bottom:18px;width:252px;
+    background:rgba(18,24,33,0.86);backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:10px;
+    padding:16px;overflow-y:auto;z-index:20;
+    font-size:12.5px;
+  }
+  #controls::-webkit-scrollbar{width:6px;}
+  #controls::-webkit-scrollbar-thumb{background:#2a3644;border-radius:3px;}
+  .grp{margin-bottom:18px;}
+  .grp:last-child{margin-bottom:4px;}
+  .grp-title{
+    font-family:var(--mono);font-size:10.5px;color:var(--blue);
+    letter-spacing:.06em;margin-bottom:9px;
+    border-bottom:1px solid var(--line);padding-bottom:6px;
+  }
+  .row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;}
+  .row label{color:var(--text-dim);font-size:12px;}
+  .btn-row{display:flex;gap:6px;flex-wrap:wrap;}
+  button{
+    font-family:var(--sans);cursor:pointer;border-radius:6px;border:1px solid var(--line);
+    background:#182230;color:var(--text);padding:7px 10px;font-size:11.5px;
+    transition:background .15s,border-color .15s,color .15s;
+  }
+  button:hover{background:#20303f;border-color:#3a4c5e;}
+  button.active{background:var(--blue);border-color:var(--blue);color:#06121f;font-weight:600;}
+  button.wide{flex:1 1 auto;}
+  .toggle{
+    position:relative;width:38px;height:20px;border-radius:20px;background:#26313e;
+    border:1px solid var(--line);cursor:pointer;flex:none;
+  }
+  .toggle::after{
+    content:'';position:absolute;top:1px;left:1px;width:16px;height:16px;border-radius:50%;
+    background:#8fa3b5;transition:transform .18s, background .18s;
+  }
+  .toggle.on{background:#20496b;border-color:var(--blue);}
+  .toggle.on::after{transform:translateX(18px);background:var(--blue);}
+  input[type=range]{
+    -webkit-appearance:none;width:100%;height:3px;border-radius:2px;background:#26313e;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--blue);
+    cursor:pointer;border:2px solid #06121f;
+  }
+  .slider-wrap{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;}
+  .slider-wrap .row{margin-bottom:0;}
+  .val{font-family:var(--mono);color:var(--accent);font-size:11px;}
+  .rack-select{
+    font-family:var(--sans);cursor:pointer;border-radius:6px;border:1px solid var(--line);
+    background:#182230;color:var(--text);padding:6px 8px;font-size:11.5px;flex:none;
+    transition:background .15s,border-color .15s;
+  }
+  .rack-select:hover{background:#20303f;border-color:#3a4c5e;}
+  button:disabled,.rack-select:disabled{opacity:0.4;cursor:not-allowed;}
+  button:disabled:hover{background:#182230;border-color:var(--line);}
+
+  .legend-item{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11.5px;color:var(--text-dim);}
+  .swatch{width:11px;height:11px;border-radius:3px;flex:none;}
+
+  .dimtable{max-height:190px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:7px 9px;}
+  .dimtable::-webkit-scrollbar{width:5px;}
+  .dimtable::-webkit-scrollbar-thumb{background:#2a3644;border-radius:3px;}
+  .dimrow{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:10.5px;
+    color:var(--text-dim);padding:3px 0;border-bottom:1px dashed #1c2530;}
+  .dimrow:last-child{border-bottom:none;}
+  .dimrow b{color:var(--text);font-weight:500;}
+  .dimrow span{color:var(--accent);white-space:nowrap;}
+
+  /* ---------- Info / description panel ---------- */
+  #info-panel{
+    position:fixed;right:18px;top:78px;width:288px;
+    background:rgba(18,24,33,0.9);backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:10px;
+    padding:16px;z-index:20;
+    transform:translateX(340px);opacity:0;
+    transition:transform .25s ease, opacity .25s ease;
+  }
+  #info-panel.show{transform:translateX(0);opacity:1;}
+  #info-panel .tag{
+    display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
+    color:var(--bg);background:var(--accent);border-radius:4px;padding:2px 6px;margin-bottom:9px;
+  }
+  #info-panel h2{margin:0 0 8px;font-size:15px;font-weight:600;}
+  #info-panel p{margin:0;font-size:12.5px;line-height:1.55;color:var(--text-dim);}
+  #info-panel .close{
+    position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text-dim);
+    font-size:16px;padding:2px 6px;line-height:1;
+  }
+  #info-panel .close:hover{color:var(--text);background:none;border:none;}
+
+  /* ---------- HTML 3D labels (callouts with leader lines) ---------- */
+  #label-layer{position:fixed;inset:0;pointer-events:none;z-index:15;}
+  #leader-layer{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:14;overflow:visible;}
+  #leader-layer polyline{fill:none;stroke:rgba(150,178,205,.5);stroke-width:1;}
+  #leader-layer polyline.sel{stroke:var(--accent);stroke-width:1.5;}
+  #leader-layer circle{fill:#9fc0e0;}
+  #leader-layer circle.sel{fill:var(--accent);}
+  #leader-layer path.dim{fill:none;stroke:var(--accent);stroke-opacity:.65;stroke-width:1;}
+  .lbl{
+    position:absolute;left:0;top:0;
+    font-family:var(--mono);font-size:10.5px;line-height:1.25;white-space:nowrap;
+    padding:3px 8px;border-radius:4px;pointer-events:auto;cursor:pointer;
+    background:rgba(11,15,20,0.88);border:1px solid #2c3b4b;color:var(--text);
+    transition:border-color .15s, color .15s;
+  }
+  .lbl:hover{border-color:var(--blue);color:#fff;}
+  .lbl.sel{border-color:var(--accent);color:var(--accent);}
+  .lbl.dim-lbl{background:transparent;border:none;color:var(--accent);font-size:10px;pointer-events:none;padding:0 2px;}
+
+  /* ---------- bottom status strip ---------- */
+  #statusbar{
+    position:fixed;left:288px;right:324px;bottom:18px;
+    display:flex;align-items:center;gap:14px;
+    background:rgba(18,24,33,0.8);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:9px;padding:9px 16px;
+    font-family:var(--mono);font-size:11px;color:var(--text-dim);z-index:20;
+  }
+  #statusbar .sep{width:1px;height:14px;background:var(--line);}
+  #statusbar b{color:var(--text);font-weight:500;}
+  #hint{margin-left:auto;color:#54636f;font-size:10.5px;}
+
+  @media (max-width: 900px){
+    #controls{width:210px;}
+    #info-panel{width:230px;}
+    #statusbar{left:228px;right:18px;}
+    #dims-readout{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="gl"></canvas></div>
+<svg id="leader-layer"></svg>
+<div id="label-layer"></div>
+
+<div id="topbar">
+  <div id="titleblock">
+    <h1>AGARBATTI VERTICAL DRYER</h1>
+    <p>ACP thermal drying cabinet — airflow &amp; stage model</p>
+  </div>
+  <div id="dims-readout">
+    75 × 75 × <b>100</b> cm cabinet<br>
+    15 mesh racks · <b id="rack-count">30</b> tray positions
+  </div>
+</div>
+
+<div id="controls">
+  <div class="grp">
+    <div class="grp-title">CAMERA</div>
+    <div class="btn-row">
+      <button class="wide" id="view-iso">Isometric</button>
+      <button class="wide" id="view-front">Front</button>
+      <button class="wide" id="view-top">Top</button>
+      <button class="wide" id="view-side">Side</button>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <label>Auto-rotate</label>
+      <div class="toggle" id="toggle-rotate"></div>
+    </div>
+  </div>
+
+  <div class="grp">
+    <div class="grp-title">STRUCTURE</div>
+    <div class="row"><label>Cabinet skin</label></div>
+    <div class="btn-row">
+      <button class="wide active" data-skin="glass">Glass</button>
+      <button class="wide" data-skin="frame">Frame</button>
+      <button class="wide" data-skin="solid">Solid</button>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <label>Show labels</label>
+      <div class="toggle on" id="toggle-labels"></div>
+    </div>
+    <div class="row">
+      <label>Show dimensions</label>
+      <div class="toggle" id="toggle-dims"></div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <label>Pull handle</label>
+      <button id="btn-handle" style="flex:none;">Extend</button>
+    </div>
+  </div>
+
+  <div class="grp">
+    <div class="grp-title">DOOR &amp; RACK LOADING</div>
+    <div class="row">
+      <label>Front door</label>
+      <button id="btn-door" style="flex:none;">Open</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <label>All racks loaded</label>
+      <div class="toggle on" id="toggle-loaded"></div>
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="wide" id="btn-empty-all">▶ Empty ALL racks</button>
+      <button class="wide" id="btn-refill-all">▶ Refill ALL racks</button>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <label>Select rack</label>
+      <select id="rack-select" class="rack-select"></select>
+    </div>
+    <div class="row" style="margin-top:2px;">
+      <label>Status</label>
+      <span class="val" id="rack-status">loaded</span>
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="wide" id="btn-rack-empty">▶ Empty this rack</button>
+      <button class="wide" id="btn-rack-refill">▶ Refill this rack</button>
+    </div>
+    <p style="color:var(--text-dim);font-size:10.5px;margin:8px 0 0;line-height:1.4;">Opens the door, slides the selected rack out, swaps its sticks, and slides it back in. “ALL racks” (or the toggle above) pulls out, empties / refills and returns all 15 racks in a cascade.</p>
+  </div>
+
+  <div class="grp">
+    <div class="grp-title">AIRFLOW SIMULATION</div>
+    <div class="row">
+      <label>Animate airflow</label>
+      <div class="toggle on" id="toggle-flow"></div>
+    </div>
+    <div class="slider-wrap">
+      <div class="row"><label>Flow speed</label><span class="val" id="speed-val">1.0×</span></div>
+      <input type="range" id="speed-slider" min="0.2" max="3" step="0.1" value="1">
+    </div>
+    <div class="slider-wrap">
+      <div class="row"><label>Particle density</label><span class="val" id="density-val">55</span></div>
+      <input type="range" id="density-slider" min="10" max="120" step="5" value="55">
+    </div>
+  </div>
+
+  <div class="grp">
+    <div class="grp-title">STAGE FOCUS</div>
+    <div class="btn-row" id="stage-buttons">
+      <button class="wide" data-stage="intake">1&amp;2 · Intake / Cooling</button>
+      <button class="wide" data-stage="blower">Blower</button>
+      <button class="wide" data-stage="coil">Heating Coil</button>
+      <button class="wide" data-stage="plenum">2.5 · Plenum Plate</button>
+      <button class="wide" data-stage="splitter">Y-Splitter</button>
+      <button class="wide" data-stage="racks">3 · Rack Zone</button>
+      <button class="wide" data-stage="chimney">Exhaust Chimney</button>
+      <button class="wide" data-stage="exhaust">4 · Exhaust Vents</button>
+      <button class="wide" data-stage="wheels">Trolley Wheels</button>
+      <button class="wide" data-stage="handle">Pull Handle</button>
+      <button class="wide" data-stage="door">Access Door</button>
+      <button class="wide" data-stage="sensor_bottom">Sensor · Bottom Rack</button>
+      <button class="wide" data-stage="sensor_mid">Sensor · Mid Rack</button>
+      <button class="wide" data-stage="sensor_top">Sensor · Top Rack</button>
+      <button class="wide" data-stage="sensor_exhaust">Sensor · Exhaust</button>
+    </div>
+  </div>
+
+  <div class="grp">
+    <div class="grp-title">PART DIMENSIONS (cm)</div>
+    <div class="dimtable" id="dim-table">
+      <div class="dimrow"><b>Cabinet shell</b><span>75 × 100 × 75</span></div>
+      <div class="dimrow"><b>Power socket unit</b><span>18 × 6 × 20</span></div>
+      <div class="dimrow"><b>BMS unit</b><span>16 × 6 × 20</span></div>
+      <div class="dimrow"><b>Battery block</b><span>18 × 6 × 20</span></div>
+      <div class="dimrow"><b>Centrifugal blower</b><span>⌀28 × 4.2</span></div>
+      <div class="dimrow"><b>Heating coil (7 turns)</b><span>⌀~26 × 7.5 tall</span></div>
+      <div class="dimrow"><b>Plenum plate</b><span>69 × 2.5 × 69</span></div>
+      <div class="dimrow"><b>Plenum plate holes ×8</b><span>⌀3.2</span></div>
+      <div class="dimrow"><b>Y-duct splitter arms</b><span>~35 long</span></div>
+      <div class="dimrow"><b>Plenum wall (×2)</b><span>6 × 54 × 65</span></div>
+      <div class="dimrow"><b>Mesh rack tray (×30)</b><span>~25 × 0.7 × 59</span></div>
+      <div class="dimrow"><b>Rack level spacing</b><span>3.57 gap</span></div>
+      <div class="dimrow"><b>Exhaust chimney</b><span>10 × 66 × 51</span></div>
+      <div class="dimrow"><b>Exhaust vent cap</b><span>⌀12 × 2</span></div>
+      <div class="dimrow"><b>ESP32 + PCB enclosure</b><span>15 × 8 × 10</span></div>
+      <div class="dimrow"><b>Trolley wheels (×2)</b><span>⌀12 × 4 wide</span></div>
+      <div class="dimrow"><b>Front feet (×2)</b><span>⌀6 × 6</span></div>
+      <div class="dimrow"><b>Pull handle</b><span>10 → 42 tall</span></div>
+      <div class="dimrow"><b>Handle grip width</b><span>32</span></div>
+      <div class="dimrow"><b>Front access door</b><span>75 × 60 × 1.6</span></div>
+      <div class="dimrow"><b>Door window</b><span>59 × 44</span></div>
+      <div class="dimrow"><b>DS18B20 probe (×3)</b><span>⌀2.2 × 3.2</span></div>
+      <div class="dimrow"><b>DHT22 module (×1)</b><span>4.4 × 6 × 2</span></div>
+    </div>
+  </div>
+
+  <div class="grp">
+    <div class="grp-title">AIR TEMPERATURE / MOISTURE KEY</div>
+    <div class="legend-item"><span class="swatch" style="background:#46d9c9"></span>Fresh intake air (ambient)</div>
+    <div class="legend-item"><span class="swatch" style="background:#ff7a45"></span>Heated air (~60°C)</div>
+    <div class="legend-item"><span class="swatch" style="background:#ffb648"></span>Drying air across racks</div>
+    <div class="legend-item"><span class="swatch" style="background:#a78bfa"></span>Moist exhaust air (exit)</div>
+  </div>
+</div>
+
+<div id="info-panel">
+  <button class="close" id="info-close">✕</button>
+  <div class="tag" id="info-tag">STAGE</div>
+  <h2 id="info-title">—</h2>
+  <p id="info-text">Click any labelled component in the model to see what it does.</p>
+</div>
+
+<div id="statusbar">
+  <span>Selected: <b id="status-selected">none</b></span>
+  <div class="sep"></div>
+  <span>Airflow: <b id="status-flow">running</b></span>
+  <div class="sep"></div>
+  <span>Skin: <b id="status-skin">glass</b></span>
+  <span id="hint">drag to rotate · scroll to zoom · right-drag to pan</span>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================================
+   EASING / DAMPING HELPERS — used everywhere something animates, so every
+   moving part (door, handle, trays, opacity fades) accelerates and settles
+   instead of moving at a constant, mechanical speed.
+   ========================================================================= */
+function easeInOutCubic(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+// frame-rate independent critical-damping step: converges at the same real-world
+// speed regardless of the current frame's dt, so motion looks identical at 30fps
+// or 144fps and never overshoots.
+function damp(current, target, rate, dt){
+  return target + (current-target) * Math.exp(-rate*dt);
+}
+
+/* =========================================================================
+   DATA — descriptions grounded in the source schematic
+   ========================================================================= */
+const STAGE_INFO = {
+  intake:   { tag:'STAGE 1 & 2', title:'Intake & Component Cooling', text:'Fresh air is drawn in through front-left vents at the cabinet base. This 10 cm compartment also houses the power socket unit, the BMS (battery management system) unit and the solid battery block — the incoming air passively cools these components before being pulled upward into the blower.' },
+  power:    { tag:'STAGE 1 & 2', title:'Power Socket Unit', text:'Mains power entry point for the dryer. Positioned in the ventilated base compartment so incoming intake air keeps it cool.' },
+  bms:      { tag:'STAGE 1 & 2', title:'BMS Unit', text:'Battery management system — monitors charge state and protects the battery block. Sits in the same cooled compartment as the intake air path.' },
+  battery:  { tag:'STAGE 1 & 2', title:'Battery (Solid Block)', text:'Backup / supply battery block for the control electronics, mounted at the base where airflow keeps thermal load low.' },
+  blower:   { tag:'BLOWER + HEATING ZONE', title:'Centrifugal Blower', text:'Draws raw air in radially and compresses it upward through the duct. This single blower is the sole air-mover for the entire 100 cm stack, so its outlet velocity sets the flow rate through every stage above it.' },
+  coil:     { tag:'BLOWER + HEATING ZONE', title:'Single 60°C Heating Coil', text:'A resistive coil heats the rising air to roughly 60°C, producing turbulent hot-air streaks. Turbulence here is intentional — it pre-mixes the air before it reaches the plenum plate.' },
+  plenum:   { tag:'STAGE 2.5', title:'Perforated Plenum Plate (Baffle Mixer)', text:'A perforated baffle plate spreads the turbulent hot air evenly across the full 75×75 cm cross-section through eight metered holes, converting a single hot jet into a balanced, homogenised sheet of air.' },
+  splitter: { tag:'STAGE 3', title:'Y-Duct Splitter Wedge', text:'A symmetric wedge divides the homogenised airflow into two equal streams, feeding the left and right plenum walls so both sides of the rack stack receive identical drying conditions.' },
+  leftwall: { tag:'STAGE 3', title:'Left Plenum Wall', text:'A vertical duct running the full 60 cm rack-zone height along the left side of the cabinet, delivering hot air to all 15 rack levels from below.' },
+  rightwall:{ tag:'STAGE 3', title:'Right Plenum Wall', text:'Mirrors the left plenum wall on the right side of the cabinet — together the two walls keep drying airflow balanced across all 30 tray positions.' },
+  racks:    { tag:'STAGE 3', title:'15 Total Mesh Racks', text:'Fifteen rack levels, each with a mesh tray on the left and right, span the 60 cm drying zone (Rack 1 nearest the blower, Rack 15 nearest the exhaust). Agarbatti sticks laid on the mesh dry as hot air is drawn in from the plenum walls, across the sticks, and inward toward the central chimney.' },
+  chimney:  { tag:'STAGE 4', title:'Perforated Exhaust Chimney', text:'A central perforated duct running the height of the rack zone collects the now-moist air converging from every rack level and carries it upward to the roof of the cabinet.' },
+  exhaust:  { tag:'STAGE 4', title:'Exhaust Discharge & System Shutdown', text:'Moist air exits through top vents above the chimney, completing the single-pass airflow circuit: intake → blower → heating coil → plenum plate → Y-splitter → plenum walls → racks → chimney → exhaust.' },
+  esp32:    { tag:'CONTROL', title:'ESP32 + PCB Enclosure', text:'Houses the ESP32 microcontroller and driver PCB that control the blower and heating coil, mounted clear of the airflow path at the top of the cabinet.' },
+  wheels:   { tag:'PORTABILITY', title:'Trolley Wheels & Feet', text:'Two large fixed wheels at the back corners (⌀12 cm) let the dryer be tipped back and rolled like a travel trolley bag, while two low glide feet at the front keep it stable and level when parked upright.' },
+  handle:   { tag:'PORTABILITY', title:'Retractable Pull Handle', text:'A telescoping handle at the back — same idea as a rolling suitcase — slides from a 10 cm retracted stub up to a 42 cm extended grip, so the cabinet can be tilted onto its wheels and pulled.' },
+  door:     { tag:'ACCESS', title:'Front Access Door', text:'A single hinged door covers the full 60 cm rack zone, hinged on the left edge with a viewing window and handle. Opening it exposes all 15 rack levels for loading and unloading agarbatti sticks.' },
+  sensor_bottom:  { tag:'SENSOR', title:'DS18B20 Probe — Bottom Rack (Rack 1)', text:'One of three 1-Wire temperature probes, mounted just inside the chimney wall at the lowest rack level, closest to the heating coil. Read by the ESP32 to track the temperature gradient from bottom to top of the stack.' },
+  sensor_mid:     { tag:'SENSOR', title:'DS18B20 Probe — Middle Rack (Rack 8)', text:'Second temperature probe, positioned at the centre rack level, giving a representative mid-stack drying temperature between the hotter bottom and cooler top.' },
+  sensor_top:     { tag:'SENSOR', title:'DS18B20 Probe — Top Rack (Rack 15)', text:'Third temperature probe, mounted at the highest rack level nearest the exhaust — typically the coolest point in the stack, useful for confirming even heat distribution.' },
+  sensor_exhaust: { tag:'SENSOR', title:'DHT22 — Top Exhaust', text:'The single humidity/temperature sensor sits just under the exhaust vent cap, reading the moist air leaving the chamber. This is what the firmware uses to judge overall drying progress and detect cycle completion.' }
+};
+
+/* =========================================================================
+   THREE.JS SETUP
+   ========================================================================= */
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f14);
+scene.fog = new THREE.Fog(0x0b0f14, 260, 620);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 1, 2000);
+
+// world group: cabinet centred at origin, y from 0(floor) to 100(roof) -> shift down 50
+const world = new THREE.Group();
+world.position.y = -50;
+scene.add(world);
+
+/* lighting */
+scene.add(new THREE.AmbientLight(0x8fa3c8, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(140,220,160);
+scene.add(key);
+const fill = new THREE.DirectionalLight(0x4a9eff, 0.35);
+fill.position.set(-160,80,-120);
+scene.add(fill);
+const rim = new THREE.DirectionalLight(0xff7a45, 0.25);
+rim.position.set(0,-40,-200);
+scene.add(rim);
+
+/* ground */
+const groundGeo = new THREE.CircleGeometry(420, 48);
+const groundMat = new THREE.MeshBasicMaterial({color:0x0d1319});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI/2;
+ground.position.y = -4.2;   // lowered to clear the trolley wheels added below the cabinet floor
+world.add(ground);
+
+const grid = new THREE.GridHelper(500, 50, 0x1b2733, 0x151f28);
+grid.position.y = -4.1;
+world.add(grid);
+
+/* =========================================================================
+   DIMENSIONS (all in cm — matches the source drawing)
+   ========================================================================= */
+const W = 75, D = 75, H = 100;         // cabinet footprint + height
+const HW = W/2, HD = D/2;
+
+const Y_INTAKE   = 10;                  // 0 -> 10   Stage 1&2
+const Y_BLOWER   = 25;                  // 10 -> 25  Blower + Heating
+const Y_PLATE0   = 25, Y_PLATE1 = 27.5; // plenum plate slab
+const Y_SPLIT1   = 31;                  // Y wedge apex
+const Y_RACK0    = 33, Y_RACK1 = 82;    // rack zone span
+const Y_DRYTOP   = 85;                  // 25 -> 85  Drying zone (60cm)
+const Y_TOPZONE  = 100;                 // 85 -> 100 Exhaust + plenum wall zone
+
+const RACKS = 15;
+const RACK_STEP = (Y_RACK1 - Y_RACK0) / (RACKS - 1);
+const WALL_X = HW - 3;                  // plenum wall centre x
+const WALL_THICK = 6;
+const CHIM_HW = 5;                      // chimney half width
+
+// trolley conversion — wheels + retractable pull handle (travel-bag inspired)
+const WHEEL_R = 6, WHEEL_W = 4, WHEEL_AXLE_Y = 3;
+const FOOT_R = 3, FOOT_H = 6;
+const HANDLE_RETRACT = 10, HANDLE_EXTEND = 42, HANDLE_GRIP_W = 32;
+
+/* materials -------------------------------------------------------------- */
+const matSteel   = new THREE.MeshStandardMaterial({color:0xaeb9c4, metalness:0.55, roughness:0.4});
+const matSteelDk = new THREE.MeshStandardMaterial({color:0x5c6b7a, metalness:0.6, roughness:0.45});
+const matDuct    = new THREE.MeshStandardMaterial({color:0x2f4054, metalness:0.35, roughness:0.55});
+const matMesh    = new THREE.MeshStandardMaterial({color:0x8a9aa8, metalness:0.3, roughness:0.6, side:THREE.DoubleSide});
+const matHeat    = new THREE.MeshStandardMaterial({color:0xff7a45, emissive:0x902b0a, emissiveIntensity:0.7, metalness:0.2, roughness:0.4});
+const matBoard   = new THREE.MeshStandardMaterial({color:0x213040, metalness:0.2, roughness:0.6});
+const matPlenum  = new THREE.MeshStandardMaterial({color:0x39506b, metalness:0.3, roughness:0.5});
+const matHole    = new THREE.MeshStandardMaterial({color:0x0a0f14, metalness:0.1, roughness:0.9});
+const matHighlight = new THREE.MeshStandardMaterial({color:0xffb648, emissive:0xffb648, emissiveIntensity:0.55, metalness:0.3, roughness:0.4});
+
+/* glass skin materials (swappable) */
+function makeGlass(){ return new THREE.MeshPhysicalMaterial({
+  color:0x4a9eff, transparent:true, opacity:0.07, roughness:0.15, metalness:0,
+  transmission:0.55, side:THREE.DoubleSide, depthWrite:false
+});}
+function makeFrame(){ return new THREE.MeshBasicMaterial({visible:false}); }
+function makeSolid(){ return new THREE.MeshStandardMaterial({color:0x1a232e, metalness:0.4, roughness:0.6, side:THREE.DoubleSide}); }
+
+/* =========================================================================
+   PICKABLE REGISTRY  { mesh -> stageId }
+   ========================================================================= */
+const pickables = [];       // {mesh, id, baseMat}
+function registerPickable(mesh, id){
+  mesh.userData.stageId = id;
+  pickables.push(mesh);
+}
+
+/* =========================================================================
+   BUILD: CABINET SHELL
+   ========================================================================= */
+const cabinetGroup = new THREE.Group();
+world.add(cabinetGroup);
+
+/* The cabinet shell is built from separate panels (NOT one closed box) so the
+   front has a real door opening and the roof has a real exhaust opening.
+   All panels share one material so Glass / Frame / Solid switch together. */
+let skinMat = makeGlass();
+const cabinetGeo = new THREE.BoxGeometry(W, H, D);      // used only for the edge outline
+const shellPanels = [];
+const SHELL_T = 0.8;
+function addShellPanel(w,h,d,x,y,z){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), skinMat);
+  m.position.set(x,y,z);
+  cabinetGroup.add(m); shellPanels.push(m);
+  return m;
+}
+addShellPanel(W,H,SHELL_T, 0,H/2,-HD+SHELL_T/2);         // back
+addShellPanel(SHELL_T,H,D, -HW+SHELL_T/2,H/2,0);          // left
+addShellPanel(SHELL_T,H,D,  HW-SHELL_T/2,H/2,0);          // right
+addShellPanel(W,SHELL_T,D, 0,SHELL_T/2,0);                // floor
+// front: lower panel (intake + blower) and upper panel (exhaust zone).
+// The band between Y_BLOWER and Y_DRYTOP is deliberately OPEN — that is the door opening.
+addShellPanel(W,Y_BLOWER,SHELL_T, 0,Y_BLOWER/2,HD-SHELL_T/2);
+addShellPanel(W,H-Y_DRYTOP,SHELL_T, 0,(Y_DRYTOP+H)/2,HD-SHELL_T/2);
+// roof with a square opening over the exhaust chimney / vent cap
+const ROOF_Y = H-SHELL_T/2, VENT_HOLE = 12;
+addShellPanel(W,SHELL_T,HD-VENT_HOLE, 0,ROOF_Y, (HD+VENT_HOLE)/2);
+addShellPanel(W,SHELL_T,HD-VENT_HOLE, 0,ROOF_Y,-(HD+VENT_HOLE)/2);
+addShellPanel(HW-VENT_HOLE,SHELL_T,2*VENT_HOLE,  (HW+VENT_HOLE)/2,ROOF_Y,0);
+addShellPanel(HW-VENT_HOLE,SHELL_T,2*VENT_HOLE, -(HW+VENT_HOLE)/2,ROOF_Y,0);
+
+// edge wireframe (always visible — gives the cabinet its "frame")
+const edges = new THREE.EdgesGeometry(cabinetGeo);
+const edgeLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({color:0x4a9eff, transparent:true, opacity:0.9}));
+edgeLines.position.set(0, H/2, 0);
+cabinetGroup.add(edgeLines);
+
+// corner posts (steel look, always visible for structure read)
+function addPost(x,z){
+  const g = new THREE.BoxGeometry(2.4,H,2.4);
+  const m = new THREE.Mesh(g, matSteelDk);
+  m.position.set(x, H/2, z);
+  cabinetGroup.add(m);
+}
+addPost(-HW+1.2,-HD+1.2); addPost(HW-1.2,-HD+1.2);
+addPost(-HW+1.2, HD-1.2); addPost(HW-1.2, HD-1.2);
+
+// zone divider guide-lines (thin, on the frame, unlit)
+function zoneLine(y){
+  const pts = [
+    new THREE.Vector3(-HW,y,-HD), new THREE.Vector3(HW,y,-HD),
+    new THREE.Vector3(HW,y,-HD),  new THREE.Vector3(HW,y,HD),
+    new THREE.Vector3(HW,y,HD),   new THREE.Vector3(-HW,y,HD),
+    new THREE.Vector3(-HW,y,HD),  new THREE.Vector3(-HW,y,-HD)
+  ];
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({color:0x23303d}));
+  cabinetGroup.add(line);
+}
+[Y_INTAKE, Y_BLOWER, Y_DRYTOP].forEach(zoneLine);
+
+/* =========================================================================
+   BUILD: TROLLEY WHEELS + FRONT FEET + RETRACTABLE PULL HANDLE
+   (travel-bag inspired: two large fixed wheels at the back, two low
+   glide feet at the front, and a telescoping handle above the wheels)
+   ========================================================================= */
+const wheelGroup = new THREE.Group();
+world.add(wheelGroup);
+
+const matWheel  = new THREE.MeshStandardMaterial({color:0x1c2430, metalness:0.3, roughness:0.55});
+const matHub    = new THREE.MeshStandardMaterial({color:0x8a94a0, metalness:0.7, roughness:0.3});
+const matHandle = new THREE.MeshStandardMaterial({color:0x9aa3ab, metalness:0.6, roughness:0.35});
+
+function makeWheel(x, z){
+  const grp = new THREE.Group();
+  const tyre = new THREE.Mesh(new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, WHEEL_W, 22), matWheel.clone());
+  tyre.rotation.z = Math.PI/2;
+  grp.add(tyre); registerPickable(tyre, 'wheels');
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(WHEEL_R*0.35, WHEEL_R*0.35, WHEEL_W+0.6, 14), matHub);
+  hub.rotation.z = Math.PI/2;
+  grp.add(hub); registerPickable(hub, 'wheels');
+  // small mounting bracket up into the cabinet base
+  const bracket = box(4, 8, 4, matSteelDk.clone());
+  bracket.position.set(0, WHEEL_AXLE_Y + WHEEL_R*0.6, 0);
+  grp.add(bracket); registerPickable(bracket, 'wheels');
+  grp.position.set(x, WHEEL_AXLE_Y, z);
+  return grp;
+}
+const wheelBackLeft  = makeWheel(-(HW-9), -HD+7);
+const wheelBackRight = makeWheel( (HW-9), -HD+7);
+wheelGroup.add(wheelBackLeft, wheelBackRight);
+
+function makeFoot(x, z){
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(FOOT_R, FOOT_R*0.8, FOOT_H, 14), matSteelDk.clone());
+  foot.position.set(x, 0, z);
+  registerPickable(foot, 'wheels');
+  return foot;
+}
+wheelGroup.add(makeFoot(-(HW-9), HD-7), makeFoot((HW-9), HD-7));
+
+// telescoping pull handle — two sliding rods + a grip bar, animated in/out
+const handleGroup = new THREE.Group();
+world.add(handleGroup);
+const handleState = { t: 0, target: 0 }; // 0 = retracted, 1 = fully extended
+
+function makeHandleRod(x){
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1, 10), matHandle);
+  rod.position.set(x, Y_TOPZONE + HANDLE_RETRACT/2, -HD+3);
+  rod.scale.y = HANDLE_RETRACT;
+  registerPickable(rod, 'handle');
+  return rod;
+}
+const handleRodL = makeHandleRod(-HANDLE_GRIP_W/2);
+const handleRodR = makeHandleRod( HANDLE_GRIP_W/2);
+const handleGrip = box(HANDLE_GRIP_W + 3, 2.6, 3, matHandle.clone());
+handleGrip.position.set(0, Y_TOPZONE + HANDLE_RETRACT, -HD+3);
+registerPickable(handleGrip, 'handle');
+handleGroup.add(handleRodL, handleRodR, handleGrip);
+
+function updateHandle(dt){
+  handleState.t = damp(handleState.t, handleState.target, 7, dt);
+  if(Math.abs(handleState.target - handleState.t) < 0.001) handleState.t = handleState.target;
+  const len = HANDLE_RETRACT + (HANDLE_EXTEND - HANDLE_RETRACT) * easeInOutCubic(handleState.t);
+  [handleRodL, handleRodR].forEach(rod=>{
+    rod.scale.y = len;
+    rod.position.y = Y_TOPZONE + len/2;
+  });
+  handleGrip.position.y = Y_TOPZONE + len;
+}
+
+/* =========================================================================
+   BUILD: FRONT ACCESS DOOR (covers the rack/drying zone, hinged on the
+   left edge, swings open for rack refilling)
+   ========================================================================= */
+const DOOR_Y0 = Y_BLOWER, DOOR_Y1 = Y_DRYTOP;
+const DOOR_H = DOOR_Y1 - DOOR_Y0;
+const doorPivot = new THREE.Group();
+doorPivot.position.set(-HW, DOOR_Y0 + DOOR_H/2, HD + 0.4);
+world.add(doorPivot);
+const doorState = { t: 0, target: 0 }; // 0 = closed, 1 = fully open
+
+const matDoor = new THREE.MeshStandardMaterial({color:0x24303c, metalness:0.4, roughness:0.5, side:THREE.DoubleSide});
+const matDoorWindow = new THREE.MeshStandardMaterial({color:0x24303c, metalness:0.4, roughness:0.5, side:THREE.DoubleSide});
+
+// door = 4-bar steel frame + a real glass window (so the interior is visible through it)
+const DOOR_BORDER = 8, DOOR_T = 1.6;
+const doorBars = [];
+function addDoorBar(w,h,x,y){
+  const b = box(w,h,DOOR_T,matDoor);
+  b.position.set(x,y,0);
+  doorPivot.add(b); registerPickable(b,'door'); doorBars.push(b);
+}
+addDoorBar(W, DOOR_BORDER, W/2,  DOOR_H/2-DOOR_BORDER/2);
+addDoorBar(W, DOOR_BORDER, W/2, -DOOR_H/2+DOOR_BORDER/2);
+addDoorBar(DOOR_BORDER, DOOR_H-2*DOOR_BORDER, DOOR_BORDER/2, 0);
+addDoorBar(DOOR_BORDER, DOOR_H-2*DOOR_BORDER, W-DOOR_BORDER/2, 0);
+
+const doorFrameEdges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W, DOOR_H, DOOR_T)), new THREE.LineBasicMaterial({color:0x4a9eff}));
+doorFrameEdges.position.set(W/2, 0, 0);
+doorPivot.add(doorFrameEdges);
+
+const doorWindow = box(W-2*DOOR_BORDER, DOOR_H-2*DOOR_BORDER, 0.4, matDoorWindow);
+doorWindow.position.set(W/2, 0, 0);
+doorPivot.add(doorWindow); registerPickable(doorWindow, 'door');
+
+const doorHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,12,10), matHandle.clone());
+doorHandle.rotation.x = Math.PI/2;
+doorHandle.position.set(W-6, 0, 2.2);
+doorPivot.add(doorHandle); registerPickable(doorHandle, 'door');
+
+const doorHingeMarks = new THREE.Mesh(new THREE.CylinderGeometry(1,1,DOOR_H,10), matSteelDk.clone());
+doorHingeMarks.position.set(0,0,0);
+doorPivot.add(doorHingeMarks); registerPickable(doorHingeMarks, 'door');
+
+function updateDoor(dt){
+  doorState.t = damp(doorState.t, doorState.target, 5.5, dt);
+  if(Math.abs(doorState.target - doorState.t) < 0.001) doorState.t = doorState.target;
+  doorPivot.rotation.y = -easeInOutCubic(doorState.t) * (100*Math.PI/180);
+}
+
+/* =========================================================================
+   BUILD: STAGE 1&2 — INTAKE / COOLING COMPARTMENT
+   ========================================================================= */
+const intakeGroup = new THREE.Group();
+world.add(intakeGroup);
+
+function box(w,h,d,mat){ return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); }
+
+const powerUnit = box(18,6,20, matBoard.clone());
+powerUnit.position.set(-24, 4, 0);
+intakeGroup.add(powerUnit); registerPickable(powerUnit,'power');
+
+const bmsUnit = box(16,6,20, matBoard.clone());
+bmsUnit.position.set(0, 4, 0);
+intakeGroup.add(bmsUnit); registerPickable(bmsUnit,'bms');
+
+const batteryUnit = box(18,6,20, matSteelDk.clone());
+batteryUnit.position.set(24, 4, 0);
+intakeGroup.add(batteryUnit); registerPickable(batteryUnit,'battery');
+
+// fresh-air inlet vents, front-left
+const ventGroup = new THREE.Group();
+for(let i=0;i<4;i++){
+  const slat = box(6,0.6,1, new THREE.MeshStandardMaterial({color:0x46d9c9, emissive:0x0e3b36, emissiveIntensity:0.5}));
+  slat.position.set(-30, 1+i*1.6, HD-0.4);
+  ventGroup.add(slat);
+}
+intakeGroup.add(ventGroup);
+
+registerPickable(intakeGroup,'intake'); // whole-group click target too (invisible box)
+const intakeHit = box(W-4, Y_INTAKE, D-4, new THREE.MeshBasicMaterial({visible:false}));
+intakeHit.position.set(0, Y_INTAKE/2, 0);
+intakeGroup.add(intakeHit); registerPickable(intakeHit,'intake');
+
+/* =========================================================================
+   BUILD: BLOWER + HEATING COIL
+   ========================================================================= */
+const blowerGroup = new THREE.Group();
+world.add(blowerGroup);
+
+const blowerHousing = new THREE.Mesh(new THREE.CylinderGeometry(14,14,4.2,28), matSteel);
+blowerHousing.position.set(0, Y_INTAKE+3.5, 0);
+blowerGroup.add(blowerHousing); registerPickable(blowerHousing,'blower');
+
+const blowerHub = new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,4.6,16), matSteelDk);
+blowerHub.position.copy(blowerHousing.position);
+blowerGroup.add(blowerHub);
+
+const bladeGroup = new THREE.Group();
+bladeGroup.position.copy(blowerHousing.position);
+for(let i=0;i<10;i++){
+  const blade = box(11,0.5,1.6, matSteelDk);
+  const ang = (i/10)*Math.PI*2;
+  blade.position.set(Math.cos(ang)*7, 0, Math.sin(ang)*7);
+  blade.rotation.y = ang;
+  bladeGroup.add(blade);
+  registerPickable(blade,'blower');
+}
+blowerGroup.add(bladeGroup);
+
+// heating coil — stacked helical rings, glowing
+const coilGroup = new THREE.Group();
+const coilY0 = Y_INTAKE + 6, coilY1 = Y_BLOWER - 1.5;
+const coilTurns = 7;
+for(let i=0;i<coilTurns;i++){
+  const t = i/(coilTurns-1);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(13 - t*1.5, 0.55, 8, 28), matHeat.clone());
+  ring.rotation.x = Math.PI/2;
+  ring.position.set(0, coilY0 + t*(coilY1-coilY0), 0);
+  coilGroup.add(ring);
+  registerPickable(ring,'coil');
+}
+blowerGroup.add(coilGroup);
+
+/* =========================================================================
+   BUILD: STAGE 2.5 — PERFORATED PLENUM PLATE
+   ========================================================================= */
+const plenumGroup = new THREE.Group();
+world.add(plenumGroup);
+
+const plenumPlate = box(W-6, Y_PLATE1-Y_PLATE0, D-6, matPlenum.clone());
+plenumPlate.position.set(0, (Y_PLATE0+Y_PLATE1)/2, 0);
+plenumGroup.add(plenumPlate); registerPickable(plenumPlate,'plenum');
+
+const holePositions = [];
+for(let i=0;i<8;i++){
+  const x = -30 + i*(60/7);
+  holePositions.push(x);
+  const hole = new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.6,Y_PLATE1-Y_PLATE0+0.4,14), matHole);
+  hole.position.set(x, (Y_PLATE0+Y_PLATE1)/2, 0);
+  plenumGroup.add(hole);
+}
+
+/* =========================================================================
+   BUILD: STAGE 3 — Y-DUCT SPLITTER
+   ========================================================================= */
+const splitterGroup = new THREE.Group();
+world.add(splitterGroup);
+
+function wedgeArm(targetX){
+  const len = Math.hypot(targetX, 4);
+  const geo = new THREE.BoxGeometry(len, 4, 6);
+  const mesh = new THREE.Mesh(geo, matDuct.clone());
+  mesh.position.set(targetX/2, Y_PLATE1 + 2, 0);
+  mesh.rotation.z = -Math.atan2(4, targetX);
+  return mesh;
+}
+const armL = wedgeArm(-WALL_X);
+const armR = wedgeArm(WALL_X);
+splitterGroup.add(armL, armR);
+registerPickable(armL,'splitter'); registerPickable(armR,'splitter');
+
+const splitterCore = new THREE.Mesh(new THREE.ConeGeometry(4.2,5,4), matDuct.clone());
+splitterCore.position.set(0, Y_PLATE1+2.5, 0);
+splitterCore.rotation.y = Math.PI/4;
+splitterGroup.add(splitterCore); registerPickable(splitterCore,'splitter');
+
+/* =========================================================================
+   BUILD: STAGE 3 — LEFT / RIGHT PLENUM WALLS + RACKS + CHIMNEY
+   ========================================================================= */
+const rackZone = new THREE.Group();
+world.add(rackZone);
+
+function plenumWall(sign){
+  const h = Y_DRYTOP - Y_SPLIT1;
+  const wall = box(WALL_THICK, h, D-10, matDuct.clone());
+  wall.position.set(sign*WALL_X, Y_SPLIT1 + h/2, 0);
+  wall.material.transparent = true; wall.material.opacity = 0.85;
+  return wall;
+}
+const leftWall = plenumWall(-1);
+const rightWall = plenumWall(1);
+rackZone.add(leftWall, rightWall);
+registerPickable(leftWall,'leftwall');
+registerPickable(rightWall,'rightwall');
+
+// central perforated exhaust chimney (spans rack zone up through the top zone)
+const chimney = box(CHIM_HW*2, (Y_TOPZONE-2) - Y_RACK0, D-24, new THREE.MeshStandardMaterial({color:0x304354, metalness:0.4, roughness:0.5, transparent:true, opacity:0.55}));
+chimney.position.set(0, (Y_RACK0 + (Y_TOPZONE-2))/2, 0);
+rackZone.add(chimney); registerPickable(chimney,'chimney');
+// perforation lines on chimney
+const chimEdges = new THREE.EdgesGeometry(chimney.geometry);
+const chimEdgeLines = new THREE.LineSegments(chimEdges, new THREE.LineBasicMaterial({color:0x4a9eff}));
+chimEdgeLines.position.copy(chimney.position);
+rackZone.add(chimEdgeLines);
+
+// rack trays — 15 levels, left + right. Track per-level refs for the
+// refill/door demo and for sensor placement (top/mid/bottom levels).
+const rackMeshes = [];
+const rackLevels = [];   // [{y, left:{tray,rods}, right:{tray,rods}}, ...] index 0..14
+function makeRodBundle(trayX, trayW, y, color){
+  const rodGroup = new THREE.Group();
+  for(let r=0;r<5;r++){
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15, D-22, 6), new THREE.MeshStandardMaterial({color}));
+    rod.rotation.x = Math.PI/2;
+    rod.position.set(trayX - trayW/2 + 3 + r*(trayW-6)/4, y+0.6, 0);
+    rodGroup.add(rod);
+  }
+  return rodGroup;
+}
+for(let i=0;i<RACKS;i++){
+  const y = Y_RACK0 + i*RACK_STEP;
+  const level = { y, left:null, right:null };
+  [-1,1].forEach(side=>{
+    const innerX = side*(CHIM_HW+1);
+    const outerX = side*(WALL_X - WALL_THICK/2);
+    const trayW = Math.abs(outerX - innerX);
+    const trayX = (innerX+outerX)/2;
+    const tray = box(trayW, 0.7, D-16, matMesh.clone());
+    tray.position.set(trayX, y, 0);
+    rackZone.add(tray);
+    rackMeshes.push(tray);
+    registerPickable(tray,'racks');
+    // agarbatti sticks — a loaded rod bundle per side, toggle-able / slide-able
+    const rods = makeRodBundle(trayX, trayW, y, 0xc9a15a);
+    rackZone.add(rods);
+    const rec = { tray, rods, trayX, trayW, side };
+    if(side===-1) level.left = rec; else level.right = rec;
+  });
+  rackLevels.push(level);
+}
+document.getElementById('rack-count').textContent = RACKS*2;
+const MID_RACK = 7;   // 0-based index used for the refill demo ("Rack 8")
+
+/* =========================================================================
+   BUILD: SENSORS — 1x DHT22 (top exhaust) + 3x DS18B20 (top/mid/bottom racks)
+   ========================================================================= */
+const sensorGroup = new THREE.Group();
+world.add(sensorGroup);
+
+const matDS18B20 = new THREE.MeshStandardMaterial({color:0xff6b45, emissive:0x5a1e0a, emissiveIntensity:0.6, metalness:0.3, roughness:0.4});
+const matDHT22   = new THREE.MeshStandardMaterial({color:0x7fd3ff, emissive:0x0b3a52, emissiveIntensity:0.6, metalness:0.3, roughness:0.4});
+const matLead    = new THREE.MeshStandardMaterial({color:0x2b2b2b});
+
+function makeDS18B20Probe(x,y,z, stageId){
+  const grp = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.1, 10, 10), matDS18B20);
+  grp.add(body); registerPickable(body, stageId);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.5,1.6,8), matDS18B20);
+  tip.position.set(0,-1.3,0);
+  grp.add(tip); registerPickable(tip, stageId);
+  const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,6,6), matLead);
+  lead.rotation.z = Math.PI/2;
+  lead.position.set(x<0 ? 3.2 : -3.2, 0, 0);
+  grp.add(lead);
+  grp.position.set(x,y,z);
+  return grp;
+}
+function makeDHT22Module(x,y,z, stageId){
+  const grp = new THREE.Group();
+  const body = box(4.4,6,2, matDHT22);
+  grp.add(body); registerPickable(body, stageId);
+  const grille = box(3.2,4,0.4, new THREE.MeshStandardMaterial({color:0xe7eef5}));
+  grille.position.set(0,0,1.2);
+  grp.add(grille); registerPickable(grille, stageId);
+  const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,8,6), matLead);
+  lead.position.set(0,-7,0);
+  grp.add(lead);
+  grp.position.set(x,y,z);
+  return grp;
+}
+
+// 3x DS18B20 — mounted just inside the chimney wall at bottom / middle / top rack levels
+const sensorBottom = makeDS18B20Probe(-(CHIM_HW+3), rackLevels[0].y+1.5, 0, 'sensor_bottom');
+const sensorMid    = makeDS18B20Probe(-(CHIM_HW+3), rackLevels[MID_RACK].y+1.5, 0, 'sensor_mid');
+const sensorTop     = makeDS18B20Probe(-(CHIM_HW+3), rackLevels[RACKS-1].y+1.5, 0, 'sensor_top');
+sensorGroup.add(sensorBottom, sensorMid, sensorTop);
+
+// 1x DHT22 — mounted at the top exhaust, just under the vent cap
+const sensorExhaust = makeDHT22Module((CHIM_HW+4), Y_TOPZONE-4, 0, 'sensor_exhaust');
+sensorGroup.add(sensorExhaust);
+
+/* =========================================================================
+   BUILD: STAGE 4 — EXHAUST VENTS + ESP32 ENCLOSURE
+   ========================================================================= */
+const topGroup = new THREE.Group();
+world.add(topGroup);
+
+const ventCap = new THREE.Mesh(new THREE.CylinderGeometry(CHIM_HW+1, CHIM_HW+1, 2, 18, 1, true),
+  new THREE.MeshStandardMaterial({color:0x4a9eff, side:THREE.DoubleSide, wireframe:true}));
+ventCap.position.set(0, Y_TOPZONE-1, 0);
+topGroup.add(ventCap); registerPickable(ventCap,'exhaust');
+
+for(let i=0;i<6;i++){
+  const ang = (i/6)*Math.PI*2;
+  const slat = box(6,1,1.4, matSteel.clone());
+  slat.position.set(Math.cos(ang)*8, Y_TOPZONE-0.5, Math.sin(ang)*8);
+  slat.rotation.y = ang;
+  slat.rotation.x = Math.PI/7;
+  topGroup.add(slat);
+  registerPickable(slat,'exhaust');
+}
+
+const esp32Box = box(15,8,10, matBoard.clone());
+esp32Box.position.set(-27, Y_TOPZONE+4, -26);
+topGroup.add(esp32Box); registerPickable(esp32Box,'esp32');
+const esp32Chip = box(5,1.4,5, new THREE.MeshStandardMaterial({color:0x1c2b3c}));
+esp32Chip.position.set(-27, Y_TOPZONE+8.3, -26);
+topGroup.add(esp32Chip);
+
+/* =========================================================================
+   HIGHLIGHT SYSTEM
+   ========================================================================= */
+const groupById = {
+  intake:[intakeGroup], power:[powerUnit], bms:[bmsUnit], battery:[batteryUnit],
+  blower:[blowerHousing, blowerHub, bladeGroup],
+  coil:[coilGroup],
+  plenum:[plenumPlate],
+  splitter:[armL, armR, splitterCore],
+  leftwall:[leftWall], rightwall:[rightWall],
+  racks: rackMeshes,
+  chimney:[chimney],
+  exhaust:[ventCap, ...topGroup.children.filter(c=>c.userData.stageId==='exhaust')],
+  esp32:[esp32Box, esp32Chip],
+  wheels:[wheelBackLeft, wheelBackRight].flatMap(g=>g.children).concat(wheelGroup.children.filter(c=>c.userData && c.userData.stageId==='wheels')),
+  handle:[handleRodL, handleRodR, handleGrip],
+  door:[...doorBars, doorWindow, doorHandle, doorHingeMarks],
+  sensor_bottom:  sensorBottom.children.filter(c=>c.material),
+  sensor_mid:     sensorMid.children.filter(c=>c.material),
+  sensor_top:      sensorTop.children.filter(c=>c.material),
+  sensor_exhaust: sensorExhaust.children.filter(c=>c.material)
+};
+const originalMats = new Map();
+let highlighted = null;
+function clearHighlight(){
+  if(!highlighted) return;
+  (groupById[highlighted]||[]).forEach(obj=>{
+    if(obj.material && originalMats.has(obj)) obj.material = originalMats.get(obj);
+  });
+  highlighted = null;
+}
+function highlightStage(id){
+  clearHighlight();
+  if(!id || !groupById[id]) return;
+  groupById[id].forEach(obj=>{
+    if(obj.material){
+      if(!originalMats.has(obj)) originalMats.set(obj, obj.material);
+      obj.material = matHighlight;
+    }
+  });
+  highlighted = id;
+}
+
+/* =========================================================================
+   LABELS (HTML overlay, projected each frame)
+   ========================================================================= */
+const labelLayer = document.getElementById('label-layer');
+const leaderLayer = document.getElementById('leader-layer');
+const SVGNS = 'http://www.w3.org/2000/svg';
+let selectedId = null;
+let hoverIdx = -1;
+const V3 = (x,y,z)=> new THREE.Vector3(x,y,z);
+const REL_TRAY_FRONT = (D-16)/2;                       // front edge of a tray, relative to its centre
+function trayFront(rec){ return V3(rec.tray.position.x, rec.tray.position.y, rec.tray.position.z + REL_TRAY_FRONT); }
+function doorHandleLocal(){
+  doorHandle.updateWorldMatrix(true,false);
+  return world.worldToLocal(doorHandle.getWorldPosition(new THREE.Vector3()));
+}
+function nearestWheelAnchor(){
+  const cam = world.worldToLocal(camera.position.clone());
+  let best = wheelBackLeft, bd = Infinity;
+  [wheelBackLeft, wheelBackRight].forEach(g=>{
+    const d = cam.distanceToSquared(g.position);
+    if(d < bd){ bd = d; best = g; }
+  });
+  const sx = best.position.x < 0 ? -1 : 1;
+  return V3(best.position.x + sx*WHEEL_W/2, best.position.y, best.position.z);
+}
+
+/* Each label carries `a` = a function returning the REAL anchor point (in cabinet
+   coordinates) on the component it names. The callout is parked in a tidy column
+   beside the cabinet and joined to that point with a leader line. */
+const LABELS = [
+  {id:'intake',   text:'Stage 1&2 · Intake & Cooling', a:()=>V3(-30, 4, HD)},
+  {id:'power',    text:'Power Socket Unit',            a:()=>V3(-24, 4, 10)},
+  {id:'bms',      text:'BMS Unit',                     a:()=>V3(0, 4, 10)},
+  {id:'battery',  text:'Battery Block',                a:()=>V3(24, 4, 10)},
+  {id:'blower',   text:'Centrifugal Blower',           a:()=>V3(0, Y_INTAKE+3.5, 14)},
+  {id:'coil',     text:'60°C Heating Coil',            a:()=>V3(0, (coilY0+coilY1)/2, 12.4)},
+  {id:'plenum',   text:'Stage 2.5 · Plenum Plate',     a:()=>V3(0, (Y_PLATE0+Y_PLATE1)/2, (D-6)/2)},
+  {id:'splitter', text:'Y · Duct Splitter Wedge',      a:()=>V3(0, Y_PLATE1+2.5, 3)},
+  {id:'leftwall', text:'Left Plenum Wall',             a:()=>V3(-WALL_X, Y_DRYTOP-6, (D-10)/2)},
+  {id:'rightwall',text:'Right Plenum Wall',            a:()=>V3( WALL_X, Y_DRYTOP-6, (D-10)/2)},
+  {id:'racks',    text:'15 Total Mesh Racks',          a:()=>trayFront(rackLevels[MID_RACK].right)},
+  {id:'racks1',   text:'Rack 1',  link:'racks',        a:()=>trayFront(rackLevels[0].left)},
+  {id:'racks15',  text:'Rack 15', link:'racks',        a:()=>trayFront(rackLevels[RACKS-1].right)},
+  {id:'chimney',  text:'Perforated Exhaust Chimney',   a:()=>V3(0, 91, (D-24)/2)},
+  {id:'exhaust',  text:'Stage 4 · Exhaust Discharge',  a:()=>V3(0, Y_TOPZONE-0.5, CHIM_HW+1)},
+  {id:'esp32',    text:'ESP32 + PCB Enclosure',        a:()=>V3(-27, Y_TOPZONE+4, -21)},
+  {id:'wheels',   text:'Trolley Wheels',               a:nearestWheelAnchor},
+  {id:'handle',   text:'Retractable Pull Handle',      a:()=>handleGrip.position.clone()},
+  {id:'door',     text:'Front Access Door',            a:doorHandleLocal},
+  {id:'sensor_bottom',  text:'DS18B20 \u00b7 Bottom Rack', a:()=>sensorBottom.position.clone()},
+  {id:'sensor_mid',     text:'DS18B20 \u00b7 Mid Rack',    a:()=>sensorMid.position.clone()},
+  {id:'sensor_top',     text:'DS18B20 \u00b7 Top Rack',    a:()=>sensorTop.position.clone()},
+  {id:'sensor_exhaust', text:'DHT22 \u00b7 Exhaust',       a:()=>sensorExhaust.position.clone()},
+];
+
+const gLeaders = document.createElementNS(SVGNS,'g');
+const gDims    = document.createElementNS(SVGNS,'g');
+leaderLayer.appendChild(gLeaders); leaderLayer.appendChild(gDims);
+
+const labelEls = [], labelW = [], leaderLines = [], leaderDots = [];
+LABELS.forEach((L,i)=>{
+  const div = document.createElement('div');
+  div.className = 'lbl';
+  div.textContent = L.text;
+  labelLayer.appendChild(div);
+  div.addEventListener('click', ()=> selectStage(L.link||L.id));
+  div.addEventListener('mouseenter', ()=>{ hoverIdx = i; });
+  div.addEventListener('mouseleave', ()=>{ if(hoverIdx===i) hoverIdx = -1; });
+  labelEls.push(div);
+  const pl = document.createElementNS(SVGNS,'polyline');
+  const dot = document.createElementNS(SVGNS,'circle'); dot.setAttribute('r','2.6');
+  gLeaders.appendChild(pl); gLeaders.appendChild(dot);
+  leaderLines.push(pl); leaderDots.push(dot);
+});
+function measureLabels(){ labelEls.forEach((d,i)=>{ const w = d.offsetWidth; if(w) labelW[i] = w; }); }
+measureLabels();
+setTimeout(measureLabels, 300);
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(measureLabels);
+
+/* dimension callouts: measured dimension lines (right = zone heights, left = overall
+   height, bottom = width) drawn along the cabinet edges, with short chips */
+const DIM_TEXTS = ['10 cm intake','15 cm blower','60 cm drying','15 cm exhaust','100 cm','75 cm'];
+const dimEls = DIM_TEXTS.map(t=>{
+  const div = document.createElement('div');
+  div.className = 'lbl dim-lbl';
+  div.textContent = t;
+  div.style.display = 'none';
+  labelLayer.appendChild(div);
+  return div;
+});
+const dimPaths = [0,1,2].map(()=>{
+  const p = document.createElementNS(SVGNS,'path'); p.setAttribute('class','dim'); gDims.appendChild(p); return p;
+});
+let dimsOn = false;
+
+/* spread callouts vertically so none overlap, keeping each as close to its anchor as possible */
+function spreadLabels(list, minY, maxY, gap){
+  list.sort((a,b)=>a.ay-b.ay);
+  const clusters = [];
+  list.forEach(it=>{
+    clusters.push({items:[it], sum:it.ay});
+    while(clusters.length>1){
+      const cur = clusters[clusters.length-1], prev = clusters[clusters.length-2];
+      const curY = cur.sum/cur.items.length, prevY = prev.sum/prev.items.length;
+      if(prevY + prev.items.length*gap > curY){
+        const np = prev.items.length, nc = cur.items.length;
+        prev.sum += cur.sum - np*gap*nc;
+        prev.items = prev.items.concat(cur.items);
+        clusters.pop();
+      } else break;
+    }
+  });
+  const ordered = [];
+  clusters.forEach(c=>{
+    const y0 = c.sum/c.items.length;
+    c.items.forEach((it,k)=>{ it.y = y0 + k*gap; ordered.push(it); });
+  });
+  let prevY = -Infinity;
+  ordered.forEach(it=>{ it.y = Math.max(it.y, minY, prevY+gap); prevY = it.y; });
+  let nextY = Infinity;
+  for(let k=ordered.length-1;k>=0;k--){ ordered[k].y = Math.min(ordered[k].y, maxY, nextY-gap); nextY = ordered[k].y; }
+}
+
+function updateLabels(){
+  const sw = window.innerWidth, sh = window.innerHeight;
+  world.updateWorldMatrix(true,false);
+  const tmp = new THREE.Vector3();
+  function toScreen(v){
+    tmp.copy(v); world.localToWorld(tmp); tmp.project(camera);
+    return { x:(tmp.x*0.5+0.5)*sw, y:(-tmp.y*0.5+0.5)*sh, ok: tmp.z<1 && tmp.z>-1 };
+  }
+
+  /* screen-space extent of the cabinet (grows while the door / racks swing out) */
+  const bpts = [];
+  [-HW,HW].forEach(x=>[-4,Y_TOPZONE+12].forEach(y=>[-HD,HD].forEach(z=>bpts.push(V3(x,y,z)))));
+  if(doorState.t > 0.02){
+    const a = doorPivot.rotation.y;
+    [DOOR_Y0,DOOR_Y1].forEach(y=>bpts.push(V3(-HW + W*Math.cos(a), y, HD+0.4 - W*Math.sin(a))));
+  }
+  let maxSlide = 0;
+  rackLevels.forEach(l=>{ if(l.slide > maxSlide) maxSlide = l.slide; });
+  if(maxSlide > 1){ bpts.push(V3(-HW,Y_RACK0,REL_TRAY_FRONT+maxSlide), V3(HW,Y_RACK1,REL_TRAY_FRONT+maxSlide)); }
+  let minX = Infinity, maxX = -Infinity;
+  bpts.forEach(p=>{ const s = toScreen(p); if(s.x<minX) minX = s.x; if(s.x>maxX) maxX = s.x; });
+  const cx = (minX+maxX)/2;
+
+  /* ---- dimension lines ---- */
+  gDims.style.display = dimsOn ? 'block' : 'none';
+  dimEls.forEach(d=>{ if(!dimsOn) d.style.display = 'none'; });
+  if(dimsOn){
+    const tick = (s,vertical)=> vertical ? `M${s.x},${s.y-5}L${s.x},${s.y+5}` : `M${s.x-5},${s.y}L${s.x+5},${s.y}`;
+    // right: zone heights
+    const ys = [0, Y_INTAKE, Y_BLOWER, Y_DRYTOP, H];
+    const rp = ys.map(y=>toScreen(V3(HW+6, y, HD)));
+    let d0 = `M${rp[0].x},${rp[0].y}L${rp[4].x},${rp[4].y}`;
+    rp.forEach(s=>{ d0 += tick(s,false); });
+    dimPaths[0].setAttribute('d', d0);
+    for(let k=0;k<4;k++){
+      const el = dimEls[k];
+      el.style.display = 'block';
+      el.style.left = ((rp[k].x+rp[k+1].x)/2 + 10)+'px';
+      el.style.top  = ((rp[k].y+rp[k+1].y)/2)+'px';
+      el.style.transform = 'translate(0,-50%)';
+    }
+    // left: overall height
+    const lp = [0,H].map(y=>toScreen(V3(-HW-6, y, HD)));
+    let d1 = `M${lp[0].x},${lp[0].y}L${lp[1].x},${lp[1].y}` + tick(lp[0],false) + tick(lp[1],false);
+    dimPaths[1].setAttribute('d', d1);
+    dimEls[4].style.display = 'block';
+    dimEls[4].style.left = ((lp[0].x+lp[1].x)/2 - 10)+'px';
+    dimEls[4].style.top  = ((lp[0].y+lp[1].y)/2)+'px';
+    dimEls[4].style.transform = 'translate(-100%,-50%)';
+    // bottom: width
+    const bp = [-HW,HW].map(x=>toScreen(V3(x, -6, HD+5)));
+    let d2 = `M${bp[0].x},${bp[0].y}L${bp[1].x},${bp[1].y}` + tick(bp[0],true) + tick(bp[1],true);
+    dimPaths[2].setAttribute('d', d2);
+    dimEls[5].style.display = 'block';
+    dimEls[5].style.left = ((bp[0].x+bp[1].x)/2)+'px';
+    dimEls[5].style.top  = ((bp[0].y+bp[1].y)/2 + 9)+'px';
+    dimEls[5].style.transform = 'translate(-50%,0)';
+  }
+
+  /* ---- component callouts ---- */
+  gLeaders.style.display = labelsOn ? 'block' : 'none';
+  if(!labelsOn){ labelEls.forEach(d=>{ d.style.display = 'none'; }); return; }
+
+  const padL = dimsOn ? 56 : 0, padR = dimsOn ? 92 : 0;
+  const items = LABELS.map((L,i)=>{
+    const s = toScreen(L.a());
+    return { i, ax:s.x, ay:s.y, ok:s.ok, side: s.x < cx ? 'L' : 'R' };
+  });
+  labelEls.forEach((d,i)=>{ if(!items[i].ok){ d.style.display = 'none'; leaderLines[i].style.display = 'none'; leaderDots[i].style.display = 'none'; } });
+  const vis = items.filter(it=>it.ok);
+  const Ls = vis.filter(it=>it.side==='L'), Rs = vis.filter(it=>it.side==='R');
+  function rebalance(from,to,toSide){
+    from.sort((a,b)=>Math.abs(a.ax-cx)-Math.abs(b.ax-cx));
+    while(from.length - to.length > 2){ const it = from.shift(); it.side = toSide; to.push(it); }
+  }
+  if(Ls.length - Rs.length > 2) rebalance(Ls,Rs,'R'); else if(Rs.length - Ls.length > 2) rebalance(Rs,Ls,'L');
+
+  const minY = 74, maxY = sh - 72, gap = 24;
+  spreadLabels(vis.filter(it=>it.side==='L'), minY, maxY, gap);
+  spreadLabels(vis.filter(it=>it.side==='R'), minY, maxY, gap);
+
+  vis.forEach(it=>{
+    const i = it.i, L = LABELS[i], div = labelEls[i];
+    const w = labelW[i] || 170;
+    let xEdge, elbowX, tf;
+    if(it.side === 'L'){
+      xEdge = Math.max(minX - 26 - padL, freeL + w);
+      elbowX = xEdge + 12; tf = 'translate(-100%,-50%)';
+    } else {
+      xEdge = Math.min(maxX + 26 + padR, freeR - w);
+      elbowX = xEdge - 12; tf = 'translate(0,-50%)';
+    }
+    div.style.display = 'block';
+    div.style.left = xEdge+'px'; div.style.top = it.y+'px'; div.style.transform = tf;
+    const sel = ((L.link||L.id) === selectedId) || hoverIdx === i;
+    div.classList.toggle('sel', (L.link||L.id) === selectedId);
+    const pl = leaderLines[i], dot = leaderDots[i];
+    pl.style.display = ''; dot.style.display = '';
+    pl.setAttribute('points', `${xEdge},${it.y} ${elbowX},${it.y} ${it.ax},${it.ay}`);
+    dot.setAttribute('cx', it.ax); dot.setAttribute('cy', it.ay);
+    pl.classList.toggle('sel', sel); dot.classList.toggle('sel', sel);
+  });
+}
+
+/* =========================================================================
+   AIRFLOW PARTICLES
+   ========================================================================= */
+const particleGeo = new THREE.SphereGeometry(0.85, 6, 6);
+function makeParticleMat(){ return new THREE.MeshBasicMaterial({color:0x46d9c9, transparent:true, opacity:0.9}); }
+
+const COLOR_FRESH = new THREE.Color(0x46d9c9);
+const COLOR_HOT   = new THREE.Color(0xff7a45);
+const COLOR_DRY   = new THREE.Color(0xffb648);
+const COLOR_MOIST = new THREE.Color(0xa78bfa);
+
+let particles = [];
+const particleGroup = new THREE.Group();
+world.add(particleGroup);
+
+function buildPath(){
+  const rackIdx = Math.floor(Math.random()*RACKS);
+  const side = Math.random() < 0.5 ? -1 : 1;
+  const rackY = Y_RACK0 + rackIdx*RACK_STEP;
+  const holeX = holePositions[Math.floor(Math.random()*holePositions.length)];
+  const holeZ = (Math.random()-0.5) * (D-14);
+  const zJit = (Math.random()-0.5) * (D-30);
+  return [
+    {p:new THREE.Vector3(-30, 1.5, HD-2), c:COLOR_FRESH, dur:0.6},                  // inlet vent
+    {p:new THREE.Vector3(-18, 4, HD*0.3), c:COLOR_FRESH, dur:0.7},                  // across intake bay
+    {p:new THREE.Vector3(0, Y_INTAKE-1, 0), c:COLOR_FRESH, dur:0.6},                // into blower
+    {p:new THREE.Vector3(0, Y_INTAKE+4, 0), c:COLOR_FRESH, dur:0.5},                // blower outlet
+    {p:new THREE.Vector3(0, coilY1, 0), c:COLOR_HOT, dur:1.1},                      // through heating coil
+    {p:new THREE.Vector3(holeX, Y_PLATE1+0.5, holeZ*0.3), c:COLOR_HOT, dur:0.6},    // through plenum hole
+    {p:new THREE.Vector3(side*WALL_X, Y_SPLIT1+1, holeZ*0.3), c:COLOR_HOT, dur:0.6},// y-splitter to wall base
+    {p:new THREE.Vector3(side*WALL_X, rackY, zJit), c:COLOR_HOT, dur:0.9+rackIdx*0.05}, // rise along plenum wall
+    {p:new THREE.Vector3(side*(CHIM_HW+1), rackY, zJit*0.4), c:COLOR_DRY, dur:0.8}, // across the rack, drying
+    {p:new THREE.Vector3(0, Y_RACK1+3, 0), c:COLOR_MOIST, dur:0.9+((RACKS-1-rackIdx)*0.05)}, // up the chimney
+    {p:new THREE.Vector3(0, Y_TOPZONE+2, 0), c:COLOR_MOIST, dur:0.5}                // exit vent
+  ];
+}
+
+function spawnParticle(){
+  const mesh = new THREE.Mesh(particleGeo, makeParticleMat());
+  const path = buildPath();
+  mesh.position.copy(path[0].p);
+  particleGroup.add(mesh);
+  return {mesh, path, seg:0, t: Math.random()*0.3};
+}
+
+function setParticleCount(n){
+  while(particles.length < n) particles.push(spawnParticle());
+  while(particles.length > n){
+    const p = particles.pop();
+    particleGroup.remove(p.mesh);
+    p.mesh.geometry.dispose ? null : null;
+  }
+}
+setParticleCount(55);
+
+let flowSpeed = 1.0, flowOn = true;
+function updateParticles(dt){
+  if(!flowOn) return;
+  particles.forEach(pt=>{
+    const seg = pt.path[pt.seg];
+    pt.t += dt * flowSpeed / seg.dur;
+    if(pt.t >= 1){
+      pt.seg++;
+      pt.t = 0;
+      if(pt.seg >= pt.path.length-1){
+        // respawn with a fresh randomized path
+        const fresh = buildPath();
+        pt.path = fresh; pt.seg = 0; pt.mesh.position.copy(fresh[0].p);
+        return;
+      }
+    }
+    const a = pt.path[pt.seg], b = pt.path[pt.seg+1];
+    if(!b) return;
+    pt.mesh.position.lerpVectors(a.p, b.p, pt.t);
+    pt.mesh.material.color.lerpColors(a.c, b.c, pt.t);
+  });
+}
+
+/* =========================================================================
+   CAMERA CONTROLS (hand-rolled orbit / pan / zoom — no external deps)
+   ========================================================================= */
+const target = new THREE.Vector3(0, 6, 0); // relative to world (already shifted)
+let radius = 250, theta = Math.PI*0.28, phi = Math.PI*0.36;
+let autoRotate = false;
+
+function clampPhi(p){ return Math.max(0.12, Math.min(Math.PI-0.12, p)); }
+function applyCamera(){
+  const x = target.x + radius*Math.sin(phi)*Math.sin(theta);
+  const y = target.y + radius*Math.cos(phi);
+  const z = target.z + radius*Math.sin(phi)*Math.cos(theta);
+  camera.position.set(x,y,z);
+  camera.lookAt(target.x, target.y, target.z);
+}
+applyCamera();
+
+let dragging=false, dragButton=0, lastX=0, lastY=0;
+canvas.addEventListener('contextmenu', e=>e.preventDefault());
+canvas.addEventListener('pointerdown', e=>{
+  dragging = true; dragButton = e.button; lastX=e.clientX; lastY=e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointerup', e=>{ dragging=false; });
+canvas.addEventListener('pointerleave', ()=>{ dragging=false; });
+canvas.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const dx = e.clientX-lastX, dy = e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  if(dragButton===2){ // pan
+    const panSpeed = radius*0.0016;
+    const rightV = new THREE.Vector3(Math.cos(theta),0,-Math.sin(theta));
+    const upV = new THREE.Vector3(0,1,0);
+    target.addScaledVector(rightV, -dx*panSpeed);
+    target.addScaledVector(upV, dy*panSpeed);
+  } else { // rotate
+    theta -= dx*0.006;
+    phi = clampPhi(phi - dy*0.006);
+  }
+  applyCamera();
+});
+canvas.addEventListener('wheel', e=>{
+  e.preventDefault();
+  radius = Math.max(60, Math.min(520, radius + e.deltaY*0.18));
+  applyCamera();
+}, {passive:false});
+
+/* touch support (single-finger rotate, two-finger pinch zoom) */
+let touchStart=null, pinchDist=null;
+canvas.addEventListener('touchstart', e=>{
+  if(e.touches.length===1){ touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}; }
+  else if(e.touches.length===2){ pinchDist = touchDist(e); }
+}, {passive:true});
+canvas.addEventListener('touchmove', e=>{
+  if(e.touches.length===1 && touchStart){
+    const dx = e.touches[0].clientX-touchStart.x, dy = e.touches[0].clientY-touchStart.y;
+    touchStart = {x:e.touches[0].clientX,y:e.touches[0].clientY};
+    theta -= dx*0.006; phi = clampPhi(phi - dy*0.006);
+    applyCamera();
+  } else if(e.touches.length===2 && pinchDist){
+    const d = touchDist(e);
+    radius = Math.max(60, Math.min(520, radius - (d-pinchDist)*0.5));
+    pinchDist = d;
+    applyCamera();
+  }
+}, {passive:true});
+function touchDist(e){
+  const dx = e.touches[0].clientX-e.touches[1].clientX;
+  const dy = e.touches[0].clientY-e.touches[1].clientY;
+  return Math.hypot(dx,dy);
+}
+
+function setView(name){
+  autoRotate = false; document.getElementById('toggle-rotate').classList.remove('on');
+  if(name==='iso'){ radius=250; theta=Math.PI*0.28; phi=Math.PI*0.36; target.set(0,6,0); }
+  if(name==='front'){ radius=240; theta=0; phi=Math.PI*0.5; target.set(0,6,0); }
+  if(name==='top'){ radius=270; theta=0.001; phi=0.15; target.set(0,6,0); }
+  if(name==='side'){ radius=240; theta=Math.PI*0.5; phi=Math.PI*0.5; target.set(0,6,0); }
+  applyCamera();
+}
+
+/* =========================================================================
+   RAYCAST SELECTION
+   ========================================================================= */
+const raycaster = new THREE.Raycaster();
+const mouseNDC = new THREE.Vector2();
+let downPos = null;
+canvas.addEventListener('pointerdown', e=>{ downPos = {x:e.clientX,y:e.clientY}; });
+canvas.addEventListener('pointerup', e=>{
+  if(!downPos) return;
+  const moved = Math.hypot(e.clientX-downPos.x, e.clientY-downPos.y);
+  downPos = null;
+  if(moved > 5 || e.button !== 0) return; // it was a drag, not a click
+  mouseNDC.x = (e.clientX/window.innerWidth)*2-1;
+  mouseNDC.y = -(e.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouseNDC, camera);
+  const hits = raycaster.intersectObjects(pickables, false);
+  if(hits.length){
+    const id = hits[0].object.userData.stageId;
+    selectStage(id);
+  }
+});
+
+/* =========================================================================
+   UI WIRING
+   ========================================================================= */
+const infoPanel = document.getElementById('info-panel');
+const infoTag = document.getElementById('info-tag');
+const infoTitle = document.getElementById('info-title');
+const infoText = document.getElementById('info-text');
+const statusSelected = document.getElementById('status-selected');
+
+function selectStage(id){
+  if(!STAGE_INFO[id]) return;
+  selectedId = id;
+  highlightStage(id);
+  const d = STAGE_INFO[id];
+  infoTag.textContent = d.tag;
+  infoTitle.textContent = d.title;
+  infoText.textContent = d.text;
+  infoPanel.classList.add('show');
+  statusSelected.textContent = d.title;
+  document.querySelectorAll('#stage-buttons button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.stage===id);
+  });
+}
+document.getElementById('info-close').addEventListener('click', ()=>{
+  infoPanel.classList.remove('show');
+  selectedId = null;
+  clearHighlight();
+  statusSelected.textContent = 'none';
+  document.querySelectorAll('#stage-buttons button').forEach(b=>b.classList.remove('active'));
+});
+
+document.querySelectorAll('#stage-buttons button').forEach(btn=>{
+  btn.addEventListener('click', ()=> selectStage(btn.dataset.stage));
+});
+
+document.getElementById('view-iso').addEventListener('click', ()=>setView('iso'));
+document.getElementById('view-front').addEventListener('click', ()=>setView('front'));
+document.getElementById('view-top').addEventListener('click', ()=>setView('top'));
+document.getElementById('view-side').addEventListener('click', ()=>setView('side'));
+
+const rotateToggle = document.getElementById('toggle-rotate');
+rotateToggle.addEventListener('click', ()=>{
+  autoRotate = !autoRotate;
+  rotateToggle.classList.toggle('on', autoRotate);
+});
+
+let labelsOn = true;
+const labelsToggle = document.getElementById('toggle-labels');
+labelsToggle.addEventListener('click', ()=>{
+  labelsOn = !labelsOn;
+  labelsToggle.classList.toggle('on', labelsOn);
+});
+
+const handleBtn = document.getElementById('btn-handle');
+handleBtn.addEventListener('click', ()=>{
+  handleState.target = handleState.target ? 0 : 1;
+  handleBtn.textContent = handleState.target ? 'Retract' : 'Extend';
+  handleBtn.classList.toggle('active', !!handleState.target);
+});
+
+const doorBtn = document.getElementById('btn-door');
+doorBtn.addEventListener('click', ()=>{
+  doorState.target = doorState.target ? 0 : 1;
+  doorBtn.textContent = doorState.target ? 'Close' : 'Open';
+  doorBtn.classList.toggle('active', !!doorState.target);
+});
+
+/* =========================================================================
+   RACK LOADING STATE — every rack level tracks its own loaded flag, a
+   smoothly-damped opacity (for fading sticks in/out) and a smoothly-damped
+   slide offset (for pulling the tray out through the door). Both are eased
+   toward a target every frame in updateRackOps(), so any number of racks
+   can fade or slide at once without ever jumping or stepping.
+   ========================================================================= */
+rackLevels.forEach(level=>{
+  [level.left, level.right].forEach(rec=>{
+    rec.rods.children.forEach(rod=>{ rod.material = rod.material.clone(); rod.material.transparent = true; });
+  });
+  level.loaded = true;
+  level.opacity = 1; level.opacityTarget = 1;
+  level.slide = 0;   level.slideTarget = 0;
+  level.busy = false;
+});
+
+/* -------- rack empty / refill operations --------
+   One operation = open the door, then every targeted rack runs its own little
+   state machine (wait -> slide out -> fade sticks -> slide back in), staggered so
+   a full 15-rack empty/refill cascades bottom to top, then the door closes. -------- */
+const RACK_SLIDE = 42;      // how far a tray slides out through the door, in cm
+const RACK_STAGGER = 0.07;  // seconds between successive racks in an ALL operation
+const ALL_RACKS = Array.from({length:RACKS}, (_,i)=>i);
+const rackOp = { active:false, all:false, mode:null, phase:'idle', doorWasOpen:false, levels:[] };
+
+const loadedToggle = document.getElementById('toggle-loaded');
+const rackSelect = document.getElementById('rack-select');
+rackSelect.innerHTML = Array.from({length:RACKS}, (_,i)=>`<option value="${i}">Rack ${i+1}</option>`).join('');
+rackSelect.value = String(MID_RACK);
+rackSelect.addEventListener('change', ()=>updateRackStatus());
+
+const rackStatusEl = document.getElementById('rack-status');
+const emptyBtn = document.getElementById('btn-rack-empty');
+const refillBtn = document.getElementById('btn-rack-refill');
+const emptyAllBtn = document.getElementById('btn-empty-all');
+const refillAllBtn = document.getElementById('btn-refill-all');
+
+function updateRackStatus(){
+  const level = rackLevels[+rackSelect.value];
+  const active = rackOp.active;
+  rackStatusEl.textContent = (active && rackOp.all) ? 'all racks…' : (level.busy ? 'working…' : (level.loaded ? 'loaded' : 'empty'));
+  emptyBtn.disabled = active || !level.loaded;
+  refillBtn.disabled = active || level.loaded;
+  emptyAllBtn.disabled = active || !rackLevels.some(l=>l.loaded);
+  refillAllBtn.disabled = active || rackLevels.every(l=>l.loaded);
+  rackSelect.disabled = active;
+  doorBtn.disabled = active;
+  const on = (active && rackOp.all) ? rackOp.mode==='refill' : rackLevels.every(l=>l.loaded);
+  loadedToggle.classList.toggle('on', on);
+}
+
+function startRackOperation(indices, mode, isAll){
+  if(rackOp.active) return;
+  const list = indices.filter(i=> mode==='empty' ? rackLevels[i].loaded : !rackLevels[i].loaded);
+  if(!list.length) return;
+  rackOp.active = true; rackOp.all = !!isAll; rackOp.mode = mode; rackOp.phase = 'opening';
+  rackOp.doorWasOpen = doorState.target === 1;
+  rackOp.levels = list.map((idx,n)=>{
+    const lv = rackLevels[idx];
+    lv.busy = true;
+    lv.op = { stage:'wait', delay: isAll ? n*RACK_STAGGER : 0 };
+    return lv;
+  });
+  doorState.target = 1; doorBtn.textContent = 'Close'; doorBtn.classList.add('active');
+  selectStage('door');
+  updateRackStatus();
+}
+emptyBtn.addEventListener('click',  ()=> startRackOperation([+rackSelect.value], 'empty', false));
+refillBtn.addEventListener('click', ()=> startRackOperation([+rackSelect.value], 'refill', false));
+emptyAllBtn.addEventListener('click',  ()=> startRackOperation(ALL_RACKS, 'empty', true));
+refillAllBtn.addEventListener('click', ()=> startRackOperation(ALL_RACKS, 'refill', true));
+// bulk toggle: same animated sequence for all 15 racks (empties if everything is loaded, otherwise refills)
+loadedToggle.addEventListener('click', ()=>{
+  if(rackOp.active) return;
+  startRackOperation(ALL_RACKS, rackLevels.every(l=>l.loaded) ? 'empty' : 'refill', true);
+});
+
+function stepLevelOp(lv, dt){
+  const op = lv.op;
+  if(op.stage==='wait'){
+    op.delay -= dt;
+    if(op.delay <= 0){ op.stage = 'out'; lv.slideTarget = RACK_SLIDE; }
+  } else if(op.stage==='out'){
+    if(Math.abs(lv.slide-RACK_SLIDE) < 0.4){ op.stage = 'swap'; lv.opacityTarget = rackOp.mode==='empty' ? 0 : 1; }
+  } else if(op.stage==='swap'){
+    if(Math.abs(lv.opacity-lv.opacityTarget) < 0.02){ lv.loaded = (rackOp.mode==='refill'); op.stage = 'in'; lv.slideTarget = 0; }
+  } else if(op.stage==='in'){
+    if(Math.abs(lv.slide) < 0.4) op.stage = 'done';
+  }
+}
+
+function updateRackOps(dt){
+  // smoothly ease every rack's opacity + slide toward its target, every frame
+  rackLevels.forEach(level=>{
+    level.opacity = damp(level.opacity, level.opacityTarget, 6, dt);
+    level.slide   = damp(level.slide,   level.slideTarget,   6, dt);
+    if(Math.abs(level.opacity-level.opacityTarget)<0.002) level.opacity = level.opacityTarget;
+    if(Math.abs(level.slide-level.slideTarget)<0.05) level.slide = level.slideTarget;
+    [level.left, level.right].forEach(rec=>{
+      rec.rods.children.forEach(rod=>{ rod.material.opacity = level.opacity; });
+      rec.rods.visible = level.opacity > 0.004;
+      rec.tray.position.z = level.slide;
+      rec.rods.position.z = level.slide;
+    });
+  });
+
+  if(!rackOp.active) return;
+  if(rackOp.phase==='opening'){
+    if(doorState.t > 0.85) rackOp.phase = 'working';
+  } else if(rackOp.phase==='working'){
+    let allDone = true;
+    rackOp.levels.forEach(lv=>{ stepLevelOp(lv, dt); if(lv.op.stage!=='done') allDone = false; });
+    if(allDone){
+      rackOp.phase = 'closing';
+      if(!rackOp.doorWasOpen){ doorState.target = 0; doorBtn.textContent = 'Open'; doorBtn.classList.remove('active'); }
+    }
+  } else if(rackOp.phase==='closing'){
+    if(rackOp.doorWasOpen || doorState.t < 0.02){
+      rackOp.levels.forEach(lv=>{ lv.busy = false; lv.op = null; });
+      rackOp.levels = [];
+      rackOp.active = false; rackOp.all = false; rackOp.phase = 'idle';
+      updateRackStatus();
+    }
+  }
+}
+updateRackStatus();
+
+const dimsToggle = document.getElementById('toggle-dims');
+dimsToggle.addEventListener('click', ()=>{
+  dimsOn = !dimsOn;
+  dimsToggle.classList.toggle('on', dimsOn);
+});
+
+const flowToggle = document.getElementById('toggle-flow');
+const statusFlow = document.getElementById('status-flow');
+flowToggle.addEventListener('click', ()=>{
+  flowOn = !flowOn;
+  flowToggle.classList.toggle('on', flowOn);
+  statusFlow.textContent = flowOn ? 'running' : 'paused';
+  particleGroup.visible = flowOn;
+});
+
+const speedSlider = document.getElementById('speed-slider');
+const speedVal = document.getElementById('speed-val');
+speedSlider.addEventListener('input', ()=>{
+  flowSpeed = parseFloat(speedSlider.value);
+  speedVal.textContent = flowSpeed.toFixed(1)+'×';
+});
+
+const densitySlider = document.getElementById('density-slider');
+const densityVal = document.getElementById('density-val');
+densitySlider.addEventListener('input', ()=>{
+  const n = parseInt(densitySlider.value,10);
+  densityVal.textContent = n;
+  setParticleCount(n);
+});
+
+const statusSkin = document.getElementById('status-skin');
+function applySkin(mode){
+  const next = mode==='glass' ? makeGlass() : mode==='frame' ? makeFrame() : makeSolid();
+  const old = skinMat;
+  skinMat = next;
+  shellPanels.forEach(p=>{ p.material = next; });
+  if(old && old.dispose) old.dispose();
+  edgeLines.visible = true;
+}
+document.querySelectorAll('[data-skin]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('[data-skin]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    statusSkin.textContent = btn.dataset.skin;
+    applySkin(btn.dataset.skin);
+  });
+});
+
+/* =========================================================================
+   RESIZE
+   ========================================================================= */
+let freeL = 282, freeR = window.innerWidth - 318;   // screen area not covered by the side panels
+function onResize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  const narrow = w <= 900;
+  freeL = narrow ? 228 : 282;
+  freeR = w - (narrow ? 250 : 318);
+  // centre the model in the free area between the two panels so callouts have room on both sides
+  const dx = (freeR - freeL > 320) ? ((freeL+freeR)/2 - w/2) : 0;
+  camera.setViewOffset(w, h, -dx, 0, w, h);
+}
+window.addEventListener('resize', onResize);
+onResize();
+
+/* =========================================================================
+   ANIMATE
+   ========================================================================= */
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  bladeGroup.rotation.y += dt * 9;
+  coilGroup.children.forEach((ring,i)=>{
+    ring.material.emissiveIntensity = 0.55 + 0.25*Math.sin(clock.elapsedTime*3 + i);
+  });
+
+  if(autoRotate){ theta += dt*0.18; applyCamera(); }
+
+  updateParticles(dt);
+  updateHandle(dt);
+  updateDoor(dt);
+  updateRackOps(dt);
+  updateLabels();
+
+  renderer.render(scene, camera);
+}
+animate();
+
+/* initial selection to orient the viewer */
+setTimeout(()=>selectStage('blower'), 400);
+
+})();
+</script>
+</body>
+</html>
