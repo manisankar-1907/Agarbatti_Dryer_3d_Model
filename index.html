@@ -638,7 +638,7 @@ world.add(doorPivot);
 const doorState = { t: 0, target: 0 }; // 0 = closed, 1 = fully open
 
 const matDoor = new THREE.MeshStandardMaterial({color:0x24303c, metalness:0.4, roughness:0.5, side:THREE.DoubleSide});
-const matDoorWindow = new THREE.MeshStandardMaterial({color:0x24303c, metalness:0.4, roughness:0.5, side:THREE.DoubleSide});
+const matDoorWindow = new THREE.MeshStandardMaterial({color:0x24303c, metalness:0.4, roughness:0.5, side:THREE.DoubleSide}); // solid opaque door panel
 
 // door = 4-bar steel frame + a real glass window (so the interior is visible through it)
 const DOOR_BORDER = 8, DOOR_T = 1.6;
@@ -657,7 +657,7 @@ const doorFrameEdges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.
 doorFrameEdges.position.set(W/2, 0, 0);
 doorPivot.add(doorFrameEdges);
 
-const doorWindow = box(W-2*DOOR_BORDER, DOOR_H-2*DOOR_BORDER, 0.4, matDoorWindow);
+const doorWindow = box(W-2*DOOR_BORDER, DOOR_H-2*DOOR_BORDER, DOOR_T, matDoorWindow);
 doorWindow.position.set(W/2, 0, 0);
 doorPivot.add(doorWindow); registerPickable(doorWindow, 'door');
 
@@ -828,10 +828,10 @@ const rackMeshes = [];
 const rackLevels = [];   // [{y, left:{tray,rods}, right:{tray,rods}}, ...] index 0..14
 function makeRodBundle(trayX, trayW, y, color){
   const rodGroup = new THREE.Group();
-  for(let r=0;r<5;r++){
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15, D-22, 6), new THREE.MeshStandardMaterial({color}));
-    rod.rotation.x = Math.PI/2;
-    rod.position.set(trayX - trayW/2 + 3 + r*(trayW-6)/4, y+0.6, 0);
+  for(let r=0;r<15;r++){
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15, trayW-6, 6), new THREE.MeshStandardMaterial({color}));
+    rod.rotation.z = Math.PI/2;
+    rod.position.set(trayX, y+0.6, -(D-22)/2 + 3 + r*(D-28)/14);
     rodGroup.add(rod);
   }
   return rodGroup;
